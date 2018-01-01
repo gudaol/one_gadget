@@ -1,13 +1,15 @@
-require 'pathname'
-require 'shellwords'
+require 'elftools'
 require 'net/http'
 require 'openssl'
+require 'pathname'
 require 'tempfile'
+
 require 'one_gadget/logger'
 
 module OneGadget
   # Define some helpful methods here.
   module Helper
+    # Format of build-id, 40 hex numbers.
     BUILD_ID_FORMAT = /[0-9a-f]{40}/
     # Define class methods here.
     module ClassMethods
@@ -28,37 +30,45 @@ module OneGadget
       #   build_id_of('/lib/x86_64-linux-gnu/libc-2.23.so')
       #   #=> '60131540dadc6796cab33388349e6e4e68692053'
       def build_id_of(path)
-        cmd = 'readelf -n ' + ::Shellwords.escape(path)
-        bid = `#{cmd}`.scan(/Build ID: (#{BUILD_ID_FORMAT})$/).first
-        return nil if bid.nil?
-        bid.first
+        ELFTools::ELFFile.new(File.open(path)).build_id
       end
 
-      # Disable colorize
+      # Disable colorize.
+      # @return [void]
       def color_off!
         @disable_color = true
       end
 
-      # Enable colorize
+      # Enable colorize.
+      # @return [void]
       def color_on!
         @disable_color = false
+      end
+
+      # Is colorify output enabled?
+      # @return [Boolean]
+      #   True or false.
+      def enable_color
+        # if not set, use tty to check
+        return $stdout.tty? if @disable_color.nil?
+        !@disable_color
       end
 
       # Color codes for pretty print
       COLOR_CODE = {
         esc_m: "\e[0m",
-        normal_s: "\e[31m", # red
-        integer: "\e[1m\e[34m", # light blue
-        reg: "\e[32m", # light green
-        sym: "\e[33m", # pry like
+        normal_s: "\e[38;5;203m", # red
+        integer: "\e[38;5;189m", # light purple
+        reg: "\e[38;5;82m", # light green
+        warn: "\e[38;5;230m" # light yellow
       }.freeze
 
       # Wrapper color codes for pretty inspect.
       # @param [String] str Contents to colorize.
-      # @option [Symbol] sev Specific which kind of color want to use, valid symbols are defined in +COLOR_CODE+.
+      # @param [Symbol] sev Specific which kind of color want to use, valid symbols are defined in +COLOR_CODE+.
       # @return [String] Wrapper with color codes.
       def colorize(str, sev: :normal_s)
-        return str if @disable_color
+        return str unless enable_color
         cc = COLOR_CODE
         color = cc.key?(sev) ? cc[sev] : ''
         "#{color}#{str.sub(cc[:esc_m], color)}#{cc[:esc_m]}"
@@ -67,10 +77,8 @@ module OneGadget
       # Fetch the latest release version's tag name.
       # @return [String] The tag name, in form +vx.x.x+.
       def latest_tag
-        releases_url = 'https://github.com/david942j/one_gadget/releases'
-        @latest_tag ||= 'v' + url_request(releases_url).scan(%r{/tree/v([\d.]+)"}).map do |tag|
-          Gem::Version.new(tag.first)
-        end.max.to_s
+        releases_url = 'https://github.com/david942j/one_gadget/releases/latest'
+        @latest_tag ||= url_request(releases_url).split('/').last
       end
 
       # Get the url which can fetch +filename+ from remote repo.
@@ -78,7 +86,7 @@ module OneGadget
       # @return [String] The url.
       def url_of_file(filename)
         raw_file_url = 'https://raw.githubusercontent.com/david942j/one_gadget/@tag/@file'
-        raw_file_url.gsub('@tag', latest_tag).gsub('@file', filename)
+        raw_file_url.sub('@tag', latest_tag).sub('@file', filename)
       end
 
       # Download the latest version of +file+ in +lib/one_gadget/builds/+ from remote repo.
@@ -101,7 +109,9 @@ module OneGadget
 
       # Get request.
       # @param [String] url The url.
-      # @return [String] The request response body.
+      # @return [String]
+      #   The request response body.
+      #   If the response is '302 Found', return the location in header.
       def url_request(url)
         uri = URI.parse(url)
         http = Net::HTTP.new(uri.host, uri.port)
@@ -111,8 +121,8 @@ module OneGadget
         request = Net::HTTP::Get.new(uri.request_uri)
 
         response = http.request(request)
-        raise ArgumentError, "Fail to get response of #{url}" unless response.code == '200'
-        response.body
+        raise ArgumentError, "Fail to get response of #{url}" unless %w(200 302).include?(response.code)
+        response.code == '302' ? response['location'] : response.body
       rescue NoMethodError, SocketError, ArgumentError => e
         p e
         nil
@@ -127,14 +137,19 @@ module OneGadget
       end
 
       # Fetch the file archiecture of +file+.
-      # @param [String] The target ELF filename.
+      # @param [String] file The target ELF filename.
       # @return [String]
       #   Only supports :amd64, :i386 now.
       def architecture(file)
-        str = `readelf -h #{::Shellwords.escape(file)}`
+        f = File.open(file)
+        str = ELFTools::ELFFile.new(f).machine
         return :amd64 if str.include?('X86-64')
         return :i386 if str.include?('Intel 80386')
         :unknown
+      rescue ELFTools::ELFError # not a valid ELF
+        :invalid
+      ensure
+        f.close
       end
 
       # Present number in hex format.

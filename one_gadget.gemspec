@@ -1,7 +1,9 @@
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'one_gadget/version'
+
 require 'date'
+
+require 'one_gadget/version'
 
 Gem::Specification.new do |s|
   s.name          = 'one_gadget'
@@ -13,7 +15,7 @@ Gem::Specification.new do |s|
 
   This gem provides such gadget finder, no need to use IDA-pro every time like a fool :p.
 
-  Also provides the command-line tool +one_gadget+ for easy usage.
+  Typing `one_gadget /path/to/libc` in terminal and having fun!
   EOS
   s.license       = 'MIT'
   s.authors       = ['david942j']
@@ -24,9 +26,12 @@ Gem::Specification.new do |s|
 
   s.required_ruby_version = '>= 2.1.0'
 
-  s.add_development_dependency 'rspec', '~> 3.5'
-  s.add_development_dependency 'rubocop', '~> 0.46'
-  s.add_development_dependency 'rake', '~> 12.0'
-  s.add_development_dependency 'simplecov', '~> 0.13.0'
+  s.add_runtime_dependency 'elftools', '~> 1.0'
+
   s.add_development_dependency 'codeclimate-test-reporter', '~> 0.6'
+  s.add_development_dependency 'rake', '~> 12.0'
+  s.add_development_dependency 'rspec', '~> 3.5'
+  s.add_development_dependency 'rubocop', '~> 0.49'
+  s.add_development_dependency 'simplecov', '~> 0.13.0'
+  s.add_development_dependency 'yard', '~> 0.9'
 end

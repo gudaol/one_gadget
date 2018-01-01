@@ -3,7 +3,7 @@ require 'one_gadget/helper'
 describe OneGadget::Helper do
   before(:all) do
     OneGadget::Helper.color_on!
-    @libcpath = File.join(File.dirname(__FILE__), 'data', 'libc-2.23-60131540dadc6796cab33388349e6e4e68692053.so')
+    @libcpath = File.join(__dir__, 'data', 'libc-2.23-60131540dadc6796cab33388349e6e4e68692053.so')
   end
   it 'abspath' do
     expect(OneGadget::Helper.abspath('./spec/data/libc-2.23-60131540dadc6796cab33388349e6e4e68692053.so'))
@@ -15,7 +15,7 @@ describe OneGadget::Helper do
   end
 
   it 'colorize' do
-    expect(OneGadget::Helper.colorize('123', sev: :integer)).to eq "\e[1m\e[34m123\e[0m"
+    expect(OneGadget::Helper.colorize('123', sev: :integer)).to eq "\e[38;5;189m123\e[0m"
   end
 
   it 'url_request' do
@@ -24,6 +24,8 @@ describe OneGadget::Helper do
 
   it 'architecture' do
     expect(OneGadget::Helper.architecture(@libcpath)).to be :amd64
-    expect(OneGadget::Helper.architecture(__FILE__)).to be :unknown
+    expect(OneGadget::Helper.architecture(__FILE__)).to be :invalid
+    # Just use for test unknown =~ =
+    expect(OneGadget::Helper.architecture(File.join(__dir__, 'data', 'aarch-libc-2.24.so'))).to be :unknown
   end
 end
